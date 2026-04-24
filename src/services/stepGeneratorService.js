@@ -1,5 +1,8 @@
 import { APP_CONFIG } from "../config/appConfig.js";
-import { STEP_GENERATION_SYSTEM_PROMPT } from "../constants/llmStepGeneration.js";
+import {
+  GEMINI_RESPONSE_SCHEMA,
+  STEP_GENERATION_SYSTEM_PROMPT
+} from "../constants/llmStepGeneration.js";
 import { parseAndValidateSteps } from "../utils/stepValidation.js";
 
 function buildError(message, code) {
@@ -20,11 +23,29 @@ function extractContentFromGeminiResponse(payload) {
   return text || null;
 }
 
+function buildUserPrompt(description, htmlContext) {
+  const sections = [`Instruction:\n${description.trim()}`];
+
+  if (typeof htmlContext === "string" && htmlContext.trim()) {
+    sections.push(
+      [
+        "Optional HTML context (simplified snippet):",
+        htmlContext.trim(),
+        "Use this context for selector quality when possible."
+      ].join("\n")
+    );
+  }
+
+  return sections.join("\n\n");
+}
+
 /**
- * @param {string} description
+ * @param {{description: string, htmlContext?: string}} input
  * @returns {Promise<Array<Object>>}
  */
-export async function generateStepsFromDescription(description) {
+export async function generateStepsFromDescription(input) {
+  const { description, htmlContext } = input;
+
   if (!APP_CONFIG.geminiApiKey) {
     throw buildError(
       "GEMINI_API_KEY is missing. Set it in your environment before calling /generate-steps.",
@@ -47,12 +68,13 @@ export async function generateStepsFromDescription(description) {
         contents: [
           {
             role: "user",
-            parts: [{ text: description }]
+            parts: [{ text: buildUserPrompt(description, htmlContext) }]
           }
         ],
         generationConfig: {
           temperature: 0,
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          responseSchema: GEMINI_RESPONSE_SCHEMA
         }
       })
     }
@@ -84,4 +106,3 @@ export async function generateStepsFromDescription(description) {
 
   return steps;
 }
-

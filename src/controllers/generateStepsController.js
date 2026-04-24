@@ -2,7 +2,10 @@ import { generateStepsFromDescription } from "../services/stepGeneratorService.j
 
 export async function generateStepsController(req, res) {
   try {
-    const steps = await generateStepsFromDescription(req.body.description);
+    const steps = await generateStepsFromDescription({
+      description: req.body.description,
+      htmlContext: req.body.htmlContext
+    });
     return res.json(steps);
   } catch (error) {
     if (error.code === "MISSING_GEMINI_API_KEY") {

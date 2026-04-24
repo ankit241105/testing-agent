@@ -8,6 +8,14 @@ function isString(value) {
   return typeof value === "string";
 }
 
+function isNonEmptyStringArray(value) {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => typeof item === "string" && item.trim().length > 0)
+  );
+}
+
 export function isValidStep(step) {
   if (!isObject(step)) return false;
   if (!ALLOWED_ACTIONS.has(step.action)) return false;
@@ -42,13 +50,30 @@ export function isValidStep(step) {
   }
 
   if (step.action === "assertion") {
+    const hasContains = Object.hasOwn(step, "contains");
+    const hasContainsAny = Object.hasOwn(step, "contains_any");
+
+    if (hasContains && hasContainsAny) return false;
+    if (!hasContains && !hasContainsAny) return false;
+
+    if (hasContains) {
+      return (
+        isString(step.target) &&
+        isString(step.contains) &&
+        Object.keys(step).length === 3 &&
+        Object.hasOwn(step, "action") &&
+        Object.hasOwn(step, "target") &&
+        Object.hasOwn(step, "contains")
+      );
+    }
+
     return (
       isString(step.target) &&
-      isString(step.contains) &&
+      isNonEmptyStringArray(step.contains_any) &&
       Object.keys(step).length === 3 &&
       Object.hasOwn(step, "action") &&
       Object.hasOwn(step, "target") &&
-      Object.hasOwn(step, "contains")
+      Object.hasOwn(step, "contains_any")
     );
   }
 
@@ -68,4 +93,3 @@ export function parseAndValidateSteps(raw) {
 
   return parsed;
 }
-

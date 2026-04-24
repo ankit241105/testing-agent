@@ -18,13 +18,20 @@
  */
 
 /**
- * @typedef {Object} AssertionStep
+ * @typedef {Object} AssertionContainsStep
  * @property {"assertion"} action
  * @property {string} target
  * @property {string} contains
  */
 
 /**
- * @typedef {OpenStep | TypeStep | ClickStep | AssertionStep} Step
+ * @typedef {Object} AssertionContainsAnyStep
+ * @property {"assertion"} action
+ * @property {string} target
+ * @property {string[]} contains_any
+ */
+
+/**
+ * @typedef {OpenStep | TypeStep | ClickStep | AssertionContainsStep | AssertionContainsAnyStep} Step
  */
 export {};
