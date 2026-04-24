@@ -1,59 +1,87 @@
-import {
-  URL_TRIGGER_REGEX,
-  LOGIN_TRIGGER_REGEX,
-  ASSERTION_TRIGGER_REGEX,
-  ASSERTION_TEXT_REGEX,
-  DEFAULT_OPEN_URL,
-  DEFAULT_ASSERTION_TEXT,
-  DEFAULT_TARGETS,
-  DEFAULT_VALUES
-} from "../constants/stepRules.js";
-import { toLowerSafe, trimTrailingPunctuation } from "../utils/textUtils.js";
-import { extractUrlFromDescription } from "../utils/urlUtils.js";
+import { APP_CONFIG } from "../config/appConfig.js";
+import { STEP_GENERATION_SYSTEM_PROMPT } from "../constants/llmStepGeneration.js";
+import { parseAndValidateSteps } from "../utils/stepValidation.js";
+
+function buildError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function extractContentFromGeminiResponse(payload) {
+  const parts = payload?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return null;
+
+  const text = parts
+    .filter((part) => part && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("");
+
+  return text || null;
+}
 
 /**
  * @param {string} description
- * @returns {Array<Object>}
+ * @returns {Promise<Array<Object>>}
  */
-export function generateStepsFromDescription(description) {
-  const steps = [];
-  const loweredDescription = toLowerSafe(description);
-
-  if (URL_TRIGGER_REGEX.test(description)) {
-    const url = extractUrlFromDescription(description) || DEFAULT_OPEN_URL;
-    steps.push({ action: "open", url });
+export async function generateStepsFromDescription(description) {
+  if (!APP_CONFIG.geminiApiKey) {
+    throw buildError(
+      "GEMINI_API_KEY is missing. Set it in your environment before calling /generate-steps.",
+      "MISSING_GEMINI_API_KEY"
+    );
   }
 
-  if (LOGIN_TRIGGER_REGEX.test(loweredDescription)) {
-    steps.push({
-      action: "type",
-      target: DEFAULT_TARGETS.email,
-      value: DEFAULT_VALUES.email
-    });
-    steps.push({
-      action: "type",
-      target: DEFAULT_TARGETS.password,
-      value: DEFAULT_VALUES.password
-    });
-    steps.push({
-      action: "click",
-      target: DEFAULT_TARGETS.submit
-    });
-  }
-
-  if (ASSERTION_TRIGGER_REGEX.test(loweredDescription)) {
-    let containsText = DEFAULT_ASSERTION_TEXT;
-    const assertionMatch = description.match(ASSERTION_TEXT_REGEX);
-    if (assertionMatch && assertionMatch[1]) {
-      containsText = trimTrailingPunctuation(assertionMatch[1]);
+  const response = await fetch(
+    `${APP_CONFIG.geminiBaseUrl}/models/${APP_CONFIG.geminiModel}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": APP_CONFIG.geminiApiKey
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: STEP_GENERATION_SYSTEM_PROMPT }]
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: description }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: "application/json"
+        }
+      })
     }
+  );
 
-    steps.push({
-      action: "assertion",
-      target: DEFAULT_TARGETS.assertion,
-      contains: containsText
-    });
+  if (!response.ok) {
+    let errorBody = "";
+    try {
+      errorBody = await response.text();
+    } catch {
+      errorBody = "";
+    }
+    throw buildError(
+      `Gemini request failed with status ${response.status}. ${errorBody}`.trim(),
+      "LLM_REQUEST_FAILED"
+    );
+  }
+
+  const data = await response.json();
+  const rawContent = extractContentFromGeminiResponse(data);
+  if (!rawContent) {
+    throw buildError("Gemini response content was empty.", "INVALID_LLM_OUTPUT");
+  }
+
+  const steps = parseAndValidateSteps(rawContent);
+  if (!steps) {
+    throw buildError("Gemini returned invalid step JSON.", "INVALID_LLM_OUTPUT");
   }
 
   return steps;
 }
+
