@@ -91,7 +91,9 @@ export async function executeStepsWithPlaywright(input) {
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: true
+    });
   } catch (error) {
     const wrappedError = new Error(
       error instanceof Error ? error.message : "Failed to launch Chromium."
