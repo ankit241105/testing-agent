@@ -8,23 +8,64 @@ Body:
 
 ```json
 {
-  "description": "Go to the login page and verify error message on invalid login",
-  "htmlContext": "<form><input id='email' ... /></form>"
+  "description": "Go to the login page and verify error message on invalid login"
 }
 ```
 
 - `description` is required.
-- `htmlContext` is optional and should be a simplified HTML snippet when available.
 
 ## Response
 
-Strict JSON array of steps. Supported step shapes:
+```json
+{
+  "steps": [
+    { "action": "open", "url": "https://example.com" }
+  ],
+  "execution": {
+    "status": "passed",
+    "results": [
+      {
+        "step": { "action": "open", "url": "https://example.com" },
+        "status": "success",
+        "playwright_error": null,
+        "llm_validation": {
+          "success": true,
+          "reason": "Page is visible and URL/state matches."
+        },
+        "screenshot": "screenshots/step-1.png"
+      }
+    ]
+  }
+}
+```
+
+Supported step shapes:
 
 - `{ "action": "open", "url": "..." }`
 - `{ "action": "click", "target": "..." }`
 - `{ "action": "type", "target": "...", "value": "..." }`
 - `{ "action": "assertion", "target": "...", "contains": "..." }`
 - `{ "action": "assertion", "target": "...", "contains_any": ["...", "..."] }`
+
+## Runtime Behavior
+
+1. Generate steps using LLM.
+2. Launch Playwright Chromium.
+3. Execute steps sequentially.
+4. After each step (success/failure):
+   - wait 500ms
+   - capture screenshot
+   - capture reduced HTML (`document.body.innerHTML` with script/style-like nodes removed)
+   - validate step with LLM using screenshot + reduced HTML
+5. Stop immediately when Playwright fails or validator returns `success: false`.
+
+## Setup
+
+Install browser binaries at least once:
+
+```bash
+npx playwright install chromium
+```
 
 ## Selector Assumptions
 
@@ -38,9 +79,9 @@ The generator is instructed to prefer selectors in this order:
 
 ## Limitations
 
-1. Dynamic DOM changes can break selectors generated from stale descriptions or stale `htmlContext`.
-2. Selectors are best-effort and may still require human review for highly dynamic or componentized UIs.
-3. `htmlContext` is optional and simplified snippets may omit key attributes that improve selector quality.
-4. LLM output is validated strictly server-side, but upstream model availability/rate limits can still cause request failures.
-5. Assertions using `contains_any` improve robustness but are still substring-based and not semantic checks.
-
+1. Dynamic DOM updates (SPA re-renders, delayed async UI) can invalidate selectors between steps.
+2. Reduced HTML is an approximation and may miss runtime state held in shadow DOM/canvas/iframes.
+3. Visual+HTML LLM validation is probabilistic and may produce false positives/negatives.
+4. LLM/API availability, rate limits, or quota can fail runs even when browser actions succeed.
+5. Assertion checks are substring-based (`contains` / `contains_any`) and are not full semantic validation.
+6. If Chromium is not installed locally, execution fails until `npx playwright install chromium` is run.
