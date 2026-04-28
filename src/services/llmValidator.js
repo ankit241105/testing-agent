@@ -2,7 +2,7 @@ import {
   STEP_VALIDATION_SCHEMA,
   STEP_VALIDATION_SYSTEM_PROMPT
 } from "../constants/llmValidation.js";
-import { generateJsonFromGemini } from "./geminiClient.js";
+import { generateJsonFromGroq } from "./groqClient.js";
 
 function parseValidationResult(rawContent) {
   let parsed;
@@ -26,14 +26,15 @@ function parseValidationResult(rawContent) {
 /**
  * @param {{
  *   step: object,
- *   screenshotBase64: string,
+ *   screenshotBase64?: string,
  *   reducedHtml: string,
- *   stepIndex: number
+ *   stepIndex: number,
+ *   includeScreenshot?: boolean
  * }} input
  * @returns {Promise<{success: boolean, reason: string}>}
  */
 export async function validateStepWithLLM(input) {
-  const { step, screenshotBase64, reducedHtml, stepIndex } = input;
+  const { step, screenshotBase64, reducedHtml, stepIndex, includeScreenshot = false } = input;
 
   const reducedHtmlSnippet =
     typeof reducedHtml === "string" ? reducedHtml.slice(0, 35000) : "";
@@ -45,13 +46,13 @@ export async function validateStepWithLLM(input) {
     reducedHtmlSnippet || "<empty>"
   ].join("\n\n");
 
-  const rawContent = await generateJsonFromGemini({
+  const rawContent = await generateJsonFromGroq({
     systemPrompt: STEP_VALIDATION_SYSTEM_PROMPT,
     userPrompt,
     responseSchema: STEP_VALIDATION_SCHEMA,
-    imageBase64: screenshotBase64,
+    imageBase64: includeScreenshot ? screenshotBase64 : undefined,
     imageMimeType: "image/png",
-    temperature: 0
+    temperature: 0.2
   });
 
   const validation = parseValidationResult(rawContent);
@@ -63,4 +64,3 @@ export async function validateStepWithLLM(input) {
 
   return validation;
 }
-

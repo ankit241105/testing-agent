@@ -1,8 +1,7 @@
 export const STEP_VALIDATION_SYSTEM_PROMPT = `
 You validate whether an automation step was completed correctly.
-You must evaluate both:
-1) Visual evidence from screenshot
-2) Structural evidence from reduced HTML
+Use structural evidence from reduced HTML first.
+Use screenshot evidence only when image input is provided.
 
 Return ONLY strict JSON:
 {"success": true/false, "reason": "short explanation"}
@@ -21,4 +20,3 @@ export const STEP_VALIDATION_SCHEMA = {
   },
   required: ["success", "reason"]
 };
-

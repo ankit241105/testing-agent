@@ -1,5 +1,16 @@
 # Generate Steps API
 
+## Environment
+
+Set these in [.env](/Users/ankitkumar/Desktop/founding engineer/.env):
+
+- `GROQ_API_KEY=...`
+- `GROQ_MODEL=openai/gpt-oss-20b`
+- `GROQ_BASE_URL=https://api.groq.com/openai/v1`
+- `MAX_AGENT_STEPS=12`
+- `OBSERVE_WAIT_MS=5000`
+- `SCREENSHOTS_DIR=screenshots`
+
 ## Request
 
 `POST /generate-steps`
@@ -49,15 +60,36 @@ Supported step shapes:
 
 ## Runtime Behavior
 
-1. Generate steps using LLM.
-2. Launch Playwright Chromium.
-3. Execute steps sequentially.
-4. After each step (success/failure):
-   - wait 500ms
-   - capture screenshot
-   - capture reduced HTML (`document.body.innerHTML` with script/style-like nodes removed)
-   - validate step with LLM using screenshot + reduced HTML
-5. Stop immediately when Playwright fails or validator returns `success: false`.
+1. Generate next step using LLM (single-step planner).
+2. Execute that step in Playwright.
+3. Wait for `/observe` payload from Chrome Extension (HTML + screenshot).
+4. Use deterministic checks first; call LLM validator only for reasoning-heavy steps.
+5. Repeat until planner returns `done=true` or any step fails.
+
+## Observe Endpoint
+
+`POST /observe`
+
+```json
+{
+  "executionId": "optional-uuid",
+  "stepIndex": 0,
+  "step": { "action": "open", "url": "https://example.com" },
+  "html": "<div>...</div>",
+  "screenshot": "<base64_png>",
+  "timestamp": "2026-04-25T10:00:00.000Z"
+}
+```
+
+If `executionId` is omitted, backend uses the currently active execution.
+
+## Chrome Extension
+
+Extension files are in [`extension/`](/Users/ankitkumar/Desktop/founding engineer/extension):
+
+1. Load unpacked extension in Chrome.
+2. Content script emits observation when page dispatches `AI_TEST_AGENT_OBSERVE`.
+3. Background script captures visible tab screenshot and posts to `/observe`.
 
 ## Setup
 
